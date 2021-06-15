@@ -14,7 +14,11 @@
 static struct {
     uint32_t workerCount;
     uint32_t tileCount;
-    uint8_t realTarget;
+    enum {
+        IMPOSSIBLE_TARGET,
+        RANDOM_TARGET,
+        ALL_TARGETS
+    } targetType;
 } benchmarkData;
 
 // Worker data
@@ -178,6 +182,10 @@ static void* Worker (void* data) {
         pthread_exit ((void*)-1);
     }
 
+    // Initialize the PRNG
+    RandomObject randomObject = RandomInitialize ();
+    RandomSetSeed (randomObject, time (NULL));
+
     // Tiles used for the game
     uint32_t tileValues[benchmarkData.tileCount];
     NumbersTiles tiles = {benchmarkData.tileCount, tileValues};
@@ -206,8 +214,15 @@ static void* Worker (void* data) {
             break;
         }
 
-        // Handle this combination
-        uint32_t target = benchmarkData.realTarget ? 101 : UINT32_MAX;
+        // Set a target for this combination
+        uint32_t target;
+        if (benchmarkData.targetType == ALL_TARGETS) {
+            target = 101;
+        } else if (benchmarkData.targetType == RANDOM_TARGET) {
+            target = 101 + (RandomGetValue (randomObject) % 899);
+        } else {
+            target = UINT32_MAX;
+        }
         while (1) {
 
             // Define the complexity
@@ -236,13 +251,16 @@ static void* Worker (void* data) {
                 workerData->complexityMax = complexity;
             }
 
-            // Next target
-            if (target >= 999) {
+            // Next target (if applicable)
+            if (benchmarkData.targetType != ALL_TARGETS || target >= 999) {
                 break;
             }
             ++target;
         }
     }
+
+    // Shut down the PRNG
+    RandomShutdown (randomObject);
 
     // Shut down the solver
     NumbersShutdown (numbersObject);
@@ -254,7 +272,7 @@ static void* Worker (void* data) {
 // Display the usage
 static void UsageDisplay (char* name) {
     printf ("Usage:\n"
-        "%s [<thread count (1-32)> [<tile count (0-8)> [real]]]\n",
+        "%s [<thread count (1-32)> [<tile count (0-8)> [impossible | random | all]]]\n",
         name);
 }
 
@@ -284,10 +302,15 @@ static int ArgumentsCheck (int argc, char** argv) {
     if (argc <= 3) {
         return 0;
     }
-    if (strcmp (argv[3], "real")) {
+    if (!strcmp (argv[3], "impossible")) {
+        benchmarkData.targetType = IMPOSSIBLE_TARGET;
+    } else if (!strcmp (argv[3], "random")) {
+        benchmarkData.targetType = RANDOM_TARGET;
+    } else if (!strcmp (argv[3], "all")) {
+        benchmarkData.targetType = ALL_TARGETS;
+    } else {
         return -1;
     }
-    benchmarkData.realTarget = 1;
 
     // Check whether there is a fourth argument
     if (argc <= 4) {
@@ -305,7 +328,7 @@ int main (int argc, char** argv) {
     // Check the arguments
     benchmarkData.workerCount = 4;
     benchmarkData.tileCount = 6;
-    benchmarkData.realTarget = 0;
+    benchmarkData.targetType = IMPOSSIBLE_TARGET;
     if (ArgumentsCheck (argc, argv)) {
         UsageDisplay (argv[0]);
         return -1;
@@ -401,7 +424,7 @@ int main (int argc, char** argv) {
         puts ("Error: Could not determine whether \"NumbersLibrary\" supports complexity check or not.");
     } else {
         printf ("The solver %s complexity check", complexityCheck ? "supports" : "does NOT support");
-        if (benchmarkData.realTarget) {
+        if (benchmarkData.targetType != IMPOSSIBLE_TARGET) {
             printf (" (max. complexity: %hu)", complexityMax);
         }
         puts (".");
@@ -411,9 +434,9 @@ int main (int argc, char** argv) {
         "Average duration to %s: %" PRIu64 " us (min.: %" PRIu64 " us, max.: %" PRIu64 " us).\n",
         durationReal / 1000000.0f,
         solverCallCount ? durationReal / solverCallCount : 0,
-        benchmarkData.realTarget ? "game" : "combination",
+        benchmarkData.targetType != IMPOSSIBLE_TARGET ? "game" : "combination",
         benchmarkData.workerCount, benchmarkData.workerCount > 1 ? "s" : "",
-        benchmarkData.realTarget ? "solve the game" : "analyze all solutions of a combination",
+        benchmarkData.targetType != IMPOSSIBLE_TARGET ? "solve the game" : "analyze all solutions of a combination",
         solverCallCount ? durationTotal / solverCallCount : 0,
         solverCallCount ? durationMin : 0,
         durationMax);

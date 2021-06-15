@@ -1,7 +1,7 @@
 // Nicolas Robert [Nrx]
 
 // "Des chiffres et des lettres" ("Numbers and letters") is one of the oldest
-// TV show running in the world. The game has a numbers round called "Le compte
+// TV shows running in the world. The game has a numbers round called "Le compte
 // est bon" ("The total is right"); this C program presents a solver for this
 // game, using a breadth-first search algorithm.
 // Reference: https://en.wikipedia.org/wiki/Des_chiffres_et_des_lettres
